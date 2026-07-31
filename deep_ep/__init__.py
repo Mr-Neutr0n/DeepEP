@@ -5,15 +5,17 @@ import subprocess
 import torch
 import os
 
-from .utils.find_pkgs import find_nccl_root
+from .utils.find_pkgs import check_nccl_version, find_nccl_root
 
 # Set some default environment provided at setup
+built_nccl_version = None
 try:
     # noinspection PyUnresolvedReferences
-    from .envs import persistent_envs
-    for key, value in persistent_envs.items():
+    from . import envs as _build_envs
+    for key, value in getattr(_build_envs, 'persistent_envs', {}).items():
         if key not in os.environ:
             os.environ[key] = value
+    built_nccl_version = getattr(_build_envs, 'built_nccl_version', None)
 except ImportError:
     pass
 
@@ -51,14 +53,17 @@ def check_nccl_so():
     if int(os.environ.get('EP_SUPPRESS_NCCL_CHECK', 0)):
         return
 
+    nccl_root = find_nccl_root()
+    check_nccl_version(nccl_root, built_nccl_version)
+
     # PyTorch may load another NCCL library, which is different to the linked one
     with open('/proc/self/maps', 'r') as f:
         loaded_nccl_so = None
         for so in [line.strip().split(' ')[-1] for line in f if 'libnccl' in line]:
             loaded_nccl_so = so if loaded_nccl_so is None else loaded_nccl_so
             assert so == loaded_nccl_so, f'Duplicate NCCL runtime found in the current system: {so} and {loaded_nccl_so}'
-    linked_nccl_so_candidates = sorted(glob.glob(f'{find_nccl_root()}/lib/libnccl.so*'))
-    assert linked_nccl_so_candidates, f'No libnccl.so found in {find_nccl_root()}/lib/'
+    linked_nccl_so_candidates = sorted(glob.glob(f'{nccl_root}/lib/libnccl.so*'))
+    assert linked_nccl_so_candidates, f'No libnccl.so found in {nccl_root}/lib/'
     linked_nccl_so = linked_nccl_so_candidates[0]
 
     # So checking binary-level equalness is necessary

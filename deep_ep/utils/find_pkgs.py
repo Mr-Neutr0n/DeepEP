@@ -1,8 +1,36 @@
 import functools
 import os
+import re
 import sys
 from importlib.metadata import distributions
 from typing import Optional
+
+
+def get_nccl_version(root: str) -> str:
+    """Read the NCCL semantic version from the installed headers."""
+    header = os.path.join(root, 'include', 'nccl.h')
+    with open(header, 'r') as f:
+        contents = f.read()
+
+    components = []
+    for name in ('MAJOR', 'MINOR', 'PATCH'):
+        match = re.search(rf'^\s*#define\s+NCCL_{name}\s+(\d+)\b', contents, re.MULTILINE)
+        if match is None:
+            raise RuntimeError(f'Cannot read NCCL version: NCCL_{name} is missing from {header}')
+        components.append(match.group(1))
+    return '.'.join(components)
+
+
+def check_nccl_version(root: str, expected: Optional[str]) -> str:
+    """Verify that the installed NCCL headers match the build-time version."""
+    actual = get_nccl_version(root)
+    if expected is not None and actual != expected:
+        raise RuntimeError(
+            f'NCCL version mismatch: DeepEP was built against {expected}, but the runtime '
+            f'environment provides {actual} at {root}. Reinstall the matching NCCL package '
+            'and rebuild DeepEP.'
+        )
+    return actual
 
 
 def find_pkg_root(name: str, lib_name: Optional[str] = None, optional: bool = False):

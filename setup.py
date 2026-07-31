@@ -78,6 +78,8 @@ class CustomBuildPy(build_py):
     def generate_default_envs(self):
         code = '# Pre-installed environment variables\n'
         code += 'persistent_envs = dict()\n'
+        nccl_version = find_pkgs.get_nccl_version(find_pkgs.find_nccl_root())
+        code += f'built_nccl_version = {nccl_version!r}\n'
         # noinspection PyShadowingNames
         for name in persistent_env_names:
             code += f"persistent_envs['{name}'] = '{os.environ[name]}'\n" if name in os.environ else ''
